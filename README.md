@@ -4,7 +4,7 @@ Real-time rendering of cycling climbs via 3D Gaussian Splatting, with camera pos
 
 ## Features
 
-- **Ride iconic climbs from your trainer.** Pre-trained 3DGS models of popular routes are available out of the box -- just download, launch the viewer, and ride.
+- **Ride iconic climbs from your trainer.** Pre-trained 3DGS models of popular routes are available out of the box.
 - **Interactive viewer.** Browser-based renderer with WASD keyboard controls (smart trainer integration coming soon).
 - **Build your own routes.** Capture video of any climb, run the preprocessing and training pipeline, and add it to your local library.
 - **Smart trainer support (planned).** Connect a Bluetooth FTMS trainer (Wahoo Kickr Core, etc.) to control speed via power output and feel gradient changes as resistance.
@@ -69,14 +69,23 @@ For contributors or anyone who wants to ride a climb that isn't in the pre-train
 
 System dependencies:
 
-- **ffmpeg** -- frame extraction from video
-- **COLMAP** -- Structure-from-Motion for camera pose estimation
-- **CUDA toolkit** -- required by gsplat for GPU-accelerated training
+- **ffmpeg** -- frame extraction from video (`sudo apt install ffmpeg`)
+- **COLMAP** -- Structure-from-Motion for camera pose estimation (`sudo apt install colmap`)
+- **Node.js 18+** -- required by the viewer dev server (`nvm install 20`)
 
-Python dependencies:
+Python dependencies (installed from `pyproject.toml`):
 
 ```bash
-pip install gsplat torch numpy viser Pillow
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+Viewer dependencies (installed from `viewer/package.json`):
+
+```bash
+cd viewer
+npm install
 ```
 
 ### Hardware Requirements
@@ -97,46 +106,43 @@ Mount a camera (GoPro, phone) on your handlebars or helmet and ride the climb. T
 
 Store raw video in `data/raw/`.
 
-### Step 2: Extract frames
+### Step 2: Preprocess (extract frames + COLMAP)
+
+The `scripts/preprocess.sh` script handles frame extraction and COLMAP reconstruction in one step:
 
 ```bash
-ffmpeg -i data/raw/climb.mp4 -vf "fps=2" data/frames/frame_%05d.jpg
+bash scripts/preprocess.sh data/raw/climb.mp4
 ```
 
-`fps=2` extracts 2 frames per second. Tune based on riding speed -- slower riding or higher fps yields more frame overlap. A 2-minute clip at fps=2 produces roughly 240 frames.
+This extracts frames at 2 fps with ffmpeg, then runs COLMAP `automatic_reconstructor` to produce camera poses and a sparse point cloud in `data/colmap/`.
 
-### Step 3: Run COLMAP
+Validate the reconstruction by checking that the camera trajectory follows a sensible path along the road. Visualize in the COLMAP GUI or with rerun.io. GLOMAP is an alternative for faster processing on large scenes.
+
+### Step 3: Train the 3DGS model
+
+Train with [gsplat](https://github.com/nerfstudio-project/gsplat) using the provided wrapper script:
 
 ```bash
-colmap automatic_reconstructor \
-  --workspace_path data/colmap \
-  --image_path data/frames
+python scripts/train.py --data_dir data/colmap --result_dir results/climb_v1
 ```
 
-This outputs camera intrinsics, extrinsics (poses), and a sparse 3D point cloud. GLOMAP is an alternative for faster processing on large scenes.
+Options:
 
-Validate the reconstruction by checking that the camera trajectory follows a sensible path along the road. Visualize in the COLMAP GUI or with rerun.io.
+- `--data_factor 4` (default) -- downsample images by 4x for faster iteration
+- `--max_steps 7000` (default) -- training iterations (7,000--30,000 typical)
 
-### Step 4: Train the 3DGS model
+Training includes a live Viser browser viewer for real-time monitoring. The output is a `.ply` file containing all Gaussian parameters (position, covariance, color, opacity). Typical training time is 10--60 min depending on GPU.
 
-Train with [gsplat](https://github.com/nerfstudio-project/gsplat):
+### Step 4: Load in viewer
+
+Launch the viewer and load the trained `.ply` file:
 
 ```bash
-python -m gsplat.examples.simple_trainer default \
-  --data_dir data/colmap \
-  --data_factor 4 \
-  --result_dir results/climb_v1
+cd viewer
+npm run dev
 ```
 
-- `--data_factor 4` downsamples images by 4x for faster iteration
-- Training includes a live Viser browser viewer for real-time monitoring
-- Typical training: 7,000--30,000 iterations (roughly 10--60 min depending on GPU)
-
-The output is a `.ply` file containing all Gaussian parameters (position, covariance, color, opacity). Check quality by rendering novel views along and slightly off the captured trajectory, and iterate on parameters as needed.
-
-### Step 5: Load in viewer
-
-Copy the `.ply` file into the viewer and ride your route.
+Open the local URL in your browser, click **Load .ply** (or drag-and-drop the file), and ride your route.
 
 ## Smart Trainer Integration (Planned)
 
@@ -183,11 +189,11 @@ WeHaveZwiftAtHome/
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 0 | Project setup and environment | Not started |
+| 0 | Project setup and environment | Done |
 | 1 | Data capture (video of a cycling climb) | Not started |
-| 2 | Preprocessing (frame extraction + COLMAP SfM) | Not started |
-| 3 | Train 3DGS model with gsplat | Not started |
-| 4 | Interactive MVP viewer with WASD controls | Not started |
+| 2 | Preprocessing (frame extraction + COLMAP SfM) | Done |
+| 3 | Train 3DGS model with gsplat | Done |
+| 4 | Interactive MVP viewer with WASD controls | Done |
 | 5 | Pre-trained route library | Not started |
 | 6 | Smart trainer integration (Bluetooth FTMS) | Planned |
 
