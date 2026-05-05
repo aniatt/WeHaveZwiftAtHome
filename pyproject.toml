@@ -10,6 +10,10 @@ dependencies = [
     "numpy",
     "viser",
     "Pillow",
+    "pycolmap",
+    "pytorch-msssim",
+    "tqdm",
+    "tensorboard",
 ]
 
 [tool.setuptools]

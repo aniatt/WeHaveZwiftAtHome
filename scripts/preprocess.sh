@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# COLMAP links against Qt and tries to initialize a GUI app even in CLI mode.
+# Force the offscreen platform plugin so it works headless (over SSH, in a
+# container, with no X display set).
+export QT_QPA_PLATFORM=offscreen
+
 usage() {
     echo "Usage: $0 <video_file> [workspace_dir]"
     echo
@@ -34,6 +39,13 @@ done
 FRAMES_DIR="$WORKSPACE/frames"
 COLMAP_DIR="$WORKSPACE/colmap"
 
+# Clean any prior output so the run starts fresh. COLMAP's automatic_reconstructor
+# can leave incompatible state if re-run on top of an existing workspace.
+if [[ -d "$FRAMES_DIR" ]] || [[ -d "$COLMAP_DIR" ]]; then
+    echo "==> Cleaning previous output: $FRAMES_DIR  $COLMAP_DIR"
+    rm -rf "$FRAMES_DIR" "$COLMAP_DIR"
+fi
+
 mkdir -p "$FRAMES_DIR" "$COLMAP_DIR"
 
 echo "==> Extracting frames from $VIDEO ..."
@@ -46,9 +58,14 @@ if [[ "$FRAME_COUNT" -lt 10 ]]; then
 fi
 
 echo "==> Running COLMAP automatic_reconstructor ..."
+# --use_gpu 0 forces CPU SIFT extraction + matching. Slower than SiftGPU but
+# works headless (SiftGPU needs an OpenGL context, which requires a display
+# server). Flip back to 1 being run with display and speedup is desired.
 colmap automatic_reconstructor \
     --workspace_path "$COLMAP_DIR" \
-    --image_path "$FRAMES_DIR"
+    --image_path "$FRAMES_DIR" \
+    --single_camera 1 \
+    --use_gpu 0
 
 SPARSE_DIR="$COLMAP_DIR/sparse"
 if [[ -d "$SPARSE_DIR" ]] && [[ -n "$(ls -A "$SPARSE_DIR" 2>/dev/null)" ]]; then
