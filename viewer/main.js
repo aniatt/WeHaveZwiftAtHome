@@ -40,12 +40,18 @@ window.addEventListener("resize", () => {
 let splatViewer = null;
 let sceneLoaded = false;
 
+// Models are trained with SH degree 3 (48 colour coeffs/splat).
+// gaussian-splats-3d only implements SH parsing/storage up to degree 2, so a higher request
+// gets clamped.
+const SH_DEGREE = 3;
+
 function createSplatViewer() {
   return new GaussianSplats3D.Viewer({
     selfDrivenMode: false,
     renderer,
     camera,
     useBuiltInControls: false,
+    sphericalHarmonicsDegree: SH_DEGREE,
   });
 }
 
@@ -132,6 +138,7 @@ async function loadFile(file) {
 
       console.log("Splat scene loaded:", {
         count,
+        sh_degree: sm.minSphericalHarmonicsDegree,
         raw_bbox_min: min.toArray().map((v) => v.toFixed(2)),
         raw_bbox_max: max.toArray().map((v) => v.toFixed(2)),
         centroid:     center.toArray().map((v) => v.toFixed(2)),
